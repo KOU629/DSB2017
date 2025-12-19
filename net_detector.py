@@ -124,7 +124,10 @@ class Net(nn.Module):
         #out = out.transpose(1, 4).transpose(1, 2).transpose(2, 3).contiguous()
         out = out.transpose(1, 2).contiguous().view(size[0], size[2], size[3], size[4], len(config['anchors']), 5)
         #out = out.view(-1, 5)
-        return out
+        if getattr(self, 'return_feature', False):
+            return out, feat
+        else:
+            return out
     
 def get_model():
     net = Net()

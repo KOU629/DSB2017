@@ -18,7 +18,7 @@ import pandas
 from multiprocessing import Pool
 from functools import partial
 import sys
-sys.path.append('../preprocessing')
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'preprocessing'))
 from step1 import step1_python
 import warnings
 
@@ -149,6 +149,11 @@ def savenpy(id,annos,filelist,data_path,prep_folder):
 
     print(name)
 
+def _resolve_path(path):
+    if os.path.isabs(path):
+        return path
+    return os.path.join(os.path.dirname(__file__), path)
+
 def full_prep(step1=True,step2 = True):
     warnings.filterwarnings("ignore")
 
@@ -158,7 +163,7 @@ def full_prep(step1=True,step2 = True):
     finished_flag = '.flag_prepkaggle'
     
     if not os.path.exists(finished_flag):
-        alllabelfiles = config['stage1_annos_path']
+        alllabelfiles = [ _resolve_path(p) for p in config['stage1_annos_path'] ]
         tmp = []
         for f in alllabelfiles:
             content = np.array(pandas.read_csv(f))
@@ -264,7 +269,7 @@ def preprocess_luna():
     luna_segment = config['luna_segment']
     savepath = config['preprocess_result_path']
     luna_data = config['luna_data']
-    luna_label = config['luna_label']
+    luna_label = _resolve_path(config['luna_label'])
     finished_flag = '.flag_preprocessluna'
     print('starting preprocessing luna')
     if not os.path.exists(finished_flag):
@@ -290,7 +295,7 @@ def preprocess_luna():
 def prepare_luna():
     print('start changing luna name')
     luna_raw = config['luna_raw']
-    luna_abbr = config['luna_abbr']
+    luna_abbr = _resolve_path(config['luna_abbr'])
     luna_data = config['luna_data']
     luna_segment = config['luna_segment']
     finished_flag = '.flag_prepareluna'
@@ -314,7 +319,7 @@ def prepare_luna():
 #         pds = pandas.DataFrame(np.array([ids,allnames]).T)
 #         namelist = list(allnames)
         
-        abbrevs = np.array(pandas.read_csv(config['luna_abbr'],header=None))
+        abbrevs = np.array(pandas.read_csv(luna_abbr,header=None))
         namelist = list(abbrevs[:,1])
         ids = abbrevs[:,0]
         

@@ -21,6 +21,7 @@ def test_detect(data_loader, net, get_pbb, save_dir, config,n_gpu):
     start_time = time.time()
     net.eval()
     split_comber = data_loader.dataset.split_comber
+    use_cuda = (n_gpu is not None and n_gpu > 0 and torch.cuda.is_available())
     for i_name, (data, target, coord, nzhw) in enumerate(data_loader):
         s = time.time()
         target = [np.asarray(t, np.float32) for t in target]
@@ -34,30 +35,37 @@ def test_detect(data_loader, net, get_pbb, save_dir, config,n_gpu):
         if 'output_feature' in config:
             if config['output_feature']:
                 isfeat = True
-        n_per_run = n_gpu
+        # 同時に処理する分割チャンク数（CPUでもバッチ化で高速化の余地あり）
+        n_per_run = int(config.get('chunks_per_run', 1))
+        if n_per_run < 1:
+            n_per_run = 1
         print(data.size())
-        splitlist = range(0,len(data)+1,n_gpu)
+        splitlist = list(range(0, len(data)+1, n_per_run))
         if splitlist[-1]!=len(data):
             splitlist.append(len(data))
         outputlist = []
         featurelist = []
 
         for i in range(len(splitlist)-1):
-            input = Variable(data[splitlist[i]:splitlist[i+1]], volatile = True).cuda()
-            inputcoord = Variable(coord[splitlist[i]:splitlist[i+1]], volatile = True).cuda()
-            if isfeat:
-                output,feature = net(input,inputcoord)
-                featurelist.append(feature.data.cpu().numpy())
-            else:
-                output = net(input,inputcoord)
-            outputlist.append(output.data.cpu().numpy())
+            input = data[splitlist[i]:splitlist[i+1]]
+            inputcoord = coord[splitlist[i]:splitlist[i+1]]
+            if use_cuda:
+                input = input.cuda()
+                inputcoord = inputcoord.cuda()
+            with torch.no_grad():
+                if isfeat:
+                    output, feature = net(input, inputcoord)
+                    featurelist.append(feature.detach().cpu().numpy())
+                else:
+                    output = net(input, inputcoord)
+            outputlist.append(output.detach().cpu().numpy())
         output = np.concatenate(outputlist,0)
         output = split_comber.combine(output,nzhw=nzhw)
         if isfeat:
             feature = np.concatenate(featurelist,0).transpose([0,2,3,4,1])[:,:,:,:,:,np.newaxis]
-            feature = split_comber.combine(feature,sidelen)[...,0]
+            feature = split_comber.combine(feature, nzhw=nzhw)[...,0]
 
-        thresh = -3
+        thresh = config.get('pbb_thresh', -3)
         pbb,mask = get_pbb(output,thresh,ismask=True)
         if isfeat:
             feature_selected = feature[mask[0],mask[1],mask[2]]
