@@ -10,6 +10,7 @@ def load_ids_from_file(path):
 def main():
     parser = argparse.ArgumentParser(description='Evaluate PBB vs LBB across cases')
     parser.add_argument('--ids-file', type=str, default='', help='Path to a text file with one case ID per line')
+    parser.add_argument('--bbox-dir', type=str, default='bbox_result', help='Directory containing *_pbb.npy and *_lbb.npy (relative to repo root or absolute)')
     parser.add_argument('--conf-th', type=float, default=-2.0, help='Confidence threshold used in evaluation')
     parser.add_argument('--nms-th', type=float, default=0.1, help='NMS IoU threshold')
     parser.add_argument('--detect-th', type=float, default=0.35, help='Detection IoU threshold to count TP')
@@ -21,21 +22,26 @@ def main():
     sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
     from layers import acc
 
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    bbox_dir = args.bbox_dir
+    if not os.path.isabs(bbox_dir):
+        bbox_dir = os.path.join(repo_root, bbox_dir)
+
     p_paths = []
     if args.ids_file:
         ids = load_ids_from_file(args.ids_file)
         for cid in ids:
-            p = os.path.join(os.path.dirname(__file__), '..', 'bbox_result', f'{cid}_pbb.npy')
+            p = os.path.join(bbox_dir, f'{cid}_pbb.npy')
             if os.path.exists(p):
                 p_paths.append(p)
     else:
-        p_paths = sorted(glob.glob(os.path.join(os.path.dirname(__file__), '..', 'bbox_result', '*_pbb.npy')))
+        p_paths = sorted(glob.glob(os.path.join(bbox_dir, '*_pbb.npy')))
 
     stats = {'tp':0,'fp':0,'fn':0,'gt':0,'scans':0}
     used = []
     for p in p_paths:
         base = os.path.basename(p).replace('_pbb.npy','')
-        l = os.path.join(os.path.dirname(__file__), '..', 'bbox_result', f'{base}_lbb.npy')
+        l = os.path.join(bbox_dir, f'{base}_lbb.npy')
         if not os.path.exists(l):
             continue
         lbb = np.load(l)
@@ -58,8 +64,17 @@ def main():
         stats['scans'] += 1
         used.append(base)
 
-    sens = stats['tp']/stats['gt'] if stats['gt'] else 0.0
+    denom = (stats['tp'] + stats['fn'])
+    sens = stats['tp']/denom if denom else 0.0
     fp_per_scan = stats['fp']/stats['scans'] if stats['scans'] else 0.0
+
+    if stats['scans'] <= 0:
+        raise RuntimeError('No cases_evaluated (0). Check --ids-file / --bbox-dir.')
+    if stats['gt'] != (stats['tp'] + stats['fn']):
+        raise RuntimeError(
+            f"Inconsistent GT accounting: gt_total={stats['gt']} != tp_total+fn_total={stats['tp'] + stats['fn']}. "
+            f"This indicates an evaluation bug or mismatched label filtering."
+        )
     print('cases_evaluated=', stats['scans'])
     print('gt_total=', stats['gt'])
     print('tp_total=', stats['tp'])

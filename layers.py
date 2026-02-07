@@ -318,8 +318,8 @@ def acc(pbb, lbb, conf_th, nms_th, detect_th):
                 bestscore = np.max(score)
             else:
                 bestscore = 0
-            if bestscore<detect_th:
-                fn.append(np.concatenate([l,[bestscore]],0))
+            # Unmatched GT is always FN in one-to-one matching.
+            fn.append(np.concatenate([l,[bestscore]],0))
 
     return tp, fp, fn, len(lbb)    
 

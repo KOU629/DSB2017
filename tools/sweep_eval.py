@@ -20,11 +20,12 @@ METRIC_KEYS = [
 
 
 def run_eval(ids_file: str, conf_th: float, detect_th: float, nms_th: float,
-             only_positive: bool = True) -> Dict[str, float]:
+             only_positive: bool = True, bbox_dir: str = "bbox_result") -> Dict[str, float]:
     cmd = [
         sys.executable,
         os.path.join("tools", "eval_pbb.py"),
         "--ids-file", ids_file,
+        "--bbox-dir", bbox_dir,
         "--conf-th", str(conf_th),
         "--detect-th", str(detect_th),
         "--nms-th", str(nms_th),
@@ -75,6 +76,7 @@ def choose_best(results: List[Tuple[float, float, Dict[str, float]]]) -> Tuple[f
 def main():
     parser = argparse.ArgumentParser(description="Sweep eval_pbb thresholds and summarize metrics")
     parser.add_argument("--ids-file", default="tools/ids_valid.txt")
+    parser.add_argument("--bbox-dir", default="bbox_result")
     parser.add_argument("--conf-th", nargs="*", type=float, default=[-2.0, -1.8, -1.5, -1.3, -1.2, -1.0, -0.8])
     parser.add_argument("--detect-th", nargs="*", type=float, default=[0.35, 0.40, 0.45, 0.50])
     parser.add_argument("--nms-th", type=float, default=0.1)
@@ -88,7 +90,7 @@ def main():
     results: List[Tuple[float, float, Dict[str, float]]] = []
     for i, (c, d) in enumerate(grid, 1):
         print(f"[{i}/{len(grid)}] conf_th={c}, detect_th={d}")
-        metrics = run_eval(args.ids_file, c, d, args.nms_th, only_positive=args.only_positive_labels)
+        metrics = run_eval(args.ids_file, c, d, args.nms_th, only_positive=args.only_positive_labels, bbox_dir=args.bbox_dir)
         results.append((c, d, metrics))
 
     # write CSV

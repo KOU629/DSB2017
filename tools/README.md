@@ -1,0 +1,5 @@
+# FROC曲線とCPMの生成
+
+Push-Location "c:\Users\user\Documents\GitHub\DSB2017"; python tools/sweep_froc.py -h; Pop-Location
+Push-Location "c:\Users\user\Documents\GitHub\DSB2017"; python tools/sweep_froc.py --ids-file tools/all_ids.txt --detect-th 0.10 --nms-th 0.1 --conf-th -6 -5 -4 -3 -2 -1 0 1 2 3 4 5 6 7 8 --out-csv tools/sweep_froc_results_all_detect010.csv; Pop-Location
+Push-Location "c:\Users\user\Documents\GitHub\DSB2017"; python tools/plot_froc_cpm.py --in-csv tools/sweep_froc_results_all_detect010.csv --label all_detect010 --out-png tools/froc_all_detect010.png --out-csv tools/froc_points_all_detect010.csv --out-json tools/froc_summary_all_detect010.json --out-table-csv tools/froc_table_all_detect010.csv --out-table-md tools/froc_table_all_detect010.md --ids-file tools/all_ids.txt --nms-th 0.1 --sweep-conf -6 -5 -4 -3 -2 -1 0 1 2 3 4 5 6 7 8 --xticks-include-cpm --xlim 0.1 10 --no-show-raw; Pop-Location

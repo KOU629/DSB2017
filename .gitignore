@@ -2,3 +2,16 @@
 *.ipynb*
 training/.flag*
 prediction*.csv
+
+# Generated evaluation artifacts (thesis plots/tables)
+tools/froc*.png
+tools/froc_points*.csv
+tools/froc_summary*.json
+tools/froc_table*.csv
+tools/froc_table*.md
+tools/sweep_*results*.csv
+tools/sweep_eval_results*.csv
+tools/sweep_froc_results*.csv
+
+# Generated export directory
+dltm_images/
