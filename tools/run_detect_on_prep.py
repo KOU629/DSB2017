@@ -20,7 +20,11 @@ from torch.utils.data import DataLoader
 
 def main():
     parser = argparse.ArgumentParser(description='Run detector on preprocessed volumes')
+    parser.add_argument('--preprocess-dir', type=str, default='', help='Override preprocess_result_path (directory containing *_clean.npy)')
+    parser.add_argument('--bbox-dir', type=str, default='', help='Override bbox_result output directory (default: repo/bbox_result)')
     parser.add_argument('--features', action='store_true', help='Also output per-proposal feature arrays')
+    parser.add_argument('--topk', type=int, default=0, help='Save top-K proposals (by conf) as *_feat.npy and *_coord.npy (requires --features)')
+    parser.add_argument('--save-topk', action='store_true', help='Alias to enable top-K saving (uses --topk, default 5 if not set)')
     parser.add_argument('--workers', type=int, default=2, help='DataLoader workers (default: 2)')
     parser.add_argument('--chunks-per-run', type=int, default=1, help='Split chunks processed per forward pass (default: 1)')
     parser.add_argument('--sidelen', type=int, default=144, help='SplitComb side length before margin (default: 144)')
@@ -36,13 +40,27 @@ def main():
     parser.add_argument('--prefetch-factor', type=int, default=1, help='DataLoader prefetch factor when workers>0 (default: 1)')
     parser.add_argument('--pbb-thresh', type=float, default=-3.0, help='Threshold for proposal selection (higher reduces proposals)')
     args = parser.parse_args()
-    prep_result_path = config_submit['preprocess_result_path']
+
+    # If user requests top-K outputs, ensure features are enabled.
+    if args.save_topk and args.topk <= 0:
+        args.topk = 5
+    if (args.save_topk or (args.topk and args.topk > 0)) and (not args.features):
+        print('[INFO] --topk/--save-topk requested; enabling --features automatically')
+        args.features = True
+    prep_result_path = args.preprocess_dir.strip() if args.preprocess_dir else config_submit['preprocess_result_path']
     detector_model = config_submit['detector_model']
     detector_param = config_submit['detector_param']
     n_gpu = max(1, int(config_submit.get('n_gpu', 1)))
 
     # 出力先（先に作っておくとスキップ判定に使える）
-    bbox_result_path = os.path.join(os.path.dirname(__file__), '..', 'bbox_result')
+    if args.bbox_dir:
+        # allow both relative (to repo root) and absolute paths
+        if os.path.isabs(args.bbox_dir):
+            bbox_result_path = args.bbox_dir
+        else:
+            bbox_result_path = os.path.join(os.path.dirname(__file__), '..', args.bbox_dir)
+    else:
+        bbox_result_path = os.path.join(os.path.dirname(__file__), '..', 'bbox_result')
     if not os.path.exists(bbox_result_path):
         os.makedirs(bbox_result_path)
 
@@ -95,6 +113,8 @@ def main():
     config1['output_feature'] = bool(args.features)
     config1['chunks_per_run'] = int(args.chunks_per_run)
     config1['pbb_thresh'] = float(args.pbb_thresh)
+    config1['save_topk'] = bool(args.save_topk or (args.topk and args.topk > 0))
+    config1['topk'] = int(args.topk) if args.topk and args.topk > 0 else 0
 
     # Torch CPU threading (optional)
     if args.threads and args.threads > 0:

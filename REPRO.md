@@ -21,33 +21,48 @@
 conda activate dsb310
 Push-Location "C:\Users\user\Documents\GitHub\DSB2017"
 
-# 2) 前処理ディレクトリから有効ID（陽性症例）を作成
-python tools\list_valid_cases.py --preprocess-dir "C:\Data\LUNA16\preprocess" --out-file tools\ids_valid.txt
+# 0) 前処理済みデータの場所（*_clean.npy と *_label.npy があるディレクトリ）
+$PREP = "C:\Data\LUNA16\preprocess"
+$BBOX = "bbox_result"
 
-# 3) 検出（全症例）: *_pbb.npy と *_lbb.npy を生成
+# NOTE: LUNA16のGT評価をするには、$PREP に *_label.npy（直径>0のラベル）が必要です。
+#       これが無い場合、検出評価（sensitivity/FP）は意味のある値になりません。
+
+# 2) 検出（全症例）: *_pbb.npy と *_lbb.npy を生成
 python tools\run_detect_on_prep.py \
-  --preprocess-dir "C:\Data\LUNA16\preprocess" \
-  --bbox-dir bbox_result \
+  --preprocess-dir "$PREP" \
+  --bbox-dir "$BBOX" \
   --ids-file tools\all_ids.txt \
-  --conf-th -0.8 --detect-th 0.35 --nms-th 0.1 \
   --skip-existing --workers 2 --chunks-per-run 64 --sidelen 144 --margin 16 \
   --force-cpu
 
+# 3) 有効ID（直径>0のGTが存在する症例）を作成
+python tools\list_valid_cases.py --bbox-dir "$BBOX" --out tools\ids_valid.txt --min-diameter 0
+
 # 4) 特徴抽出（陽性症例）: *_feature.npy を追加生成
 python tools\run_detect_on_prep.py \
-  --preprocess-dir "C:\Data\LUNA16\preprocess" \
-  --bbox-dir bbox_result \
+  --preprocess-dir "$PREP" \
+  --bbox-dir "$BBOX" \
   --ids-file tools\ids_valid.txt \
-  --conf-th -0.8 --detect-th 0.35 --nms-th 0.1 \
   --skip-existing --workers 2 --chunks-per-run 64 --sidelen 144 --margin 16 \
   --force-cpu --features
+
+# (任意) top-K の特徴・座標を追加保存: *_feat.npy と *_coord.npy
+# - *_feat.npy は (K, 128) の検出器特徴（proposalごと）
+# - *_coord.npy は (K, 5) の [conf,z,y,x,d]
+python tools\run_detect_on_prep.py \
+  --preprocess-dir "$PREP" \
+  --bbox-dir "$BBOX" \
+  --ids-file tools\ids_valid.txt \
+  --skip-existing --workers 2 --chunks-per-run 64 --sidelen 144 --margin 16 \
+  --force-cpu --features --save-topk --topk 5
 
 # 5) 評価（陽性のみ感度 / 全症例のFP/scan）
 python tools\eval_pbb.py --ids-file tools\ids_valid.txt --only-positive-labels --conf-th -0.8 --nms-th 0.1 --detect-th 0.35
 python tools\eval_pbb.py --ids-file tools\all_ids.txt --conf-th -0.8 --nms-th 0.1 --detect-th 0.35
 
 # 6) 特徴品質（提案純度 & プローブAUC）
-python tools\eval_features_probe.py --ids-file tools\ids_valid.txt --bbox-dir bbox_result --detect-th 0.35 --probe
+python tools\eval_features_probe.py --ids-file tools\ids_valid.txt --bbox-dir "$BBOX" --detect-th 0.35 --probe
 
 Pop-Location
 ```
@@ -56,7 +71,13 @@ Pop-Location
 - [bbox_result/](bbox_result) に検出結果が保存されます:
   - `*_pbb.npy`: 提案ボックスと信頼度
   - `*_lbb.npy`: 正解ラベル（存在する症例のみ）
-  - `*_feature.npy`: 128次元の特徴ベクトル（`--features` 指定時）
+  - `*_feature.npy`: 128次元の特徴ベクトル（`--features` 指定時、proposalごとに1本）
+  - `*_feat.npy`: top-K proposalの特徴（`--save-topk --topk K` 指定時）
+  - `*_coord.npy`: top-K proposalの [conf,z,y,x,d]（`--save-topk --topk K` 指定時）
+
+## 特徴とproposalの対応について
+- `*_feature.npy` は `*_pbb.npy` の行と 1:1 に対応することを想定しています（同一runの出力同士で対応）。
+- 後段で `*_pbb.npy` に NMS/閾値処理を追加適用する場合、同じインデックスで `*_feature.npy` 側も同様に間引いてください。
 
 ## 推奨閾値
 - `conf_th = -0.8`, `detect_th = 0.35`, `nms_th = 0.1`
