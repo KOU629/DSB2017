@@ -35,6 +35,8 @@ def test_detect(data_loader, net, get_pbb, save_dir, config,n_gpu):
         if 'output_feature' in config:
             if config['output_feature']:
                 isfeat = True
+        save_topk = bool(config.get('save_topk', False))
+        topk = int(config.get('topk', 0) or 0)
         # 同時に処理する分割チャンク数（CPUでもバッチ化で高速化の余地あり）
         n_per_run = int(config.get('chunks_per_run', 1))
         if n_per_run < 1:
@@ -70,6 +72,15 @@ def test_detect(data_loader, net, get_pbb, save_dir, config,n_gpu):
         if isfeat:
             feature_selected = feature[mask[0],mask[1],mask[2]]
             np.save(os.path.join(save_dir, shortname+'_feature.npy'), feature_selected)
+            if save_topk and topk > 0:
+                if len(pbb) == 0:
+                    np.save(os.path.join(save_dir, shortname+'_feat.npy'), np.zeros((0, feature_selected.shape[1]), dtype=feature_selected.dtype))
+                    np.save(os.path.join(save_dir, shortname+'_coord.npy'), np.zeros((0, 5), dtype=pbb.dtype if hasattr(pbb, 'dtype') else np.float32))
+                else:
+                    k = min(topk, len(pbb))
+                    order = np.argsort(-pbb[:, 0])[:k]
+                    np.save(os.path.join(save_dir, shortname+'_feat.npy'), feature_selected[order])
+                    np.save(os.path.join(save_dir, shortname+'_coord.npy'), pbb[order])
         #tp,fp,fn,_ = acc(pbb,lbb,0,0.1,0.1)
         #print([len(tp),len(fp),len(fn)])
         print([i_name,shortname])
